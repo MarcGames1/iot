@@ -82,7 +82,7 @@
   </PropertyGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>C:\Work\IoT\Repo\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(SolutionDir)..\_external\freeglut\include;$(SolutionDir)..\_external\stb-master;$(SolutionDir)..\_external\glew-2.1.0\include;$(SolutionDir);$(SolutionDir)..\_external\glm;$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(SolutionDir)..\_external\freeglut\include;$(SolutionDir)..\_external\stb-master;$(SolutionDir)..\_external\glew-2.1.0\include;$(SolutionDir);$(SolutionDir)..\_external\glm;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Work\IoT\Repo\_external\glfw-3.3.8.bin.WIN32\lib-vc2022;C:\Work\IoT\Repo\_external\glew-2.1.0\lib\Release\Win32;C:\Work\IoT\Repo\_external\freeglut\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -91,7 +91,7 @@
     <LibraryPath>$(SolutionDir)..\_external\freeglut\lib;$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\lib-vc2022;$(SolutionDir)..\_external\glew-2.1.0\lib\Release\Win32;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>C:\Work\IoT\Repo\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(SolutionDir)..\_external\freeglut\include;$(SolutionDir)..\_external\stb-master;$(SolutionDir)..\_external\glew-2.1.0\include;$(SolutionDir);$(SolutionDir)..\_external\glm;$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(SolutionDir)..\_external\freeglut\include;$(SolutionDir)..\_external\stb-master;$(SolutionDir)..\_external\glew-2.1.0\include;$(SolutionDir);$(SolutionDir)..\_external\glm;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Work\IoT\Repo\_external\glfw-3.3.8.bin.WIN32\lib-vc2022;C:\Work\IoT\Repo\_external\glew-2.1.0\lib\Release\Win32;C:\Work\IoT\Repo\_external\freeglut\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
@@ -196,14 +196,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Object Include="cube.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-    </Object>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
