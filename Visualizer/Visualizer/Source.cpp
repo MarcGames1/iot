@@ -42,13 +42,14 @@ int main(int argc, char** argv)
     glfwSetScrollCallback(window, scroll_callback);
 
     // tell GLFW to capture our mouse
-    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     glewInit();
 
     // Create camera
     pCamera = new Camera(SCR_WIDTH, SCR_HEIGHT, glm::vec3(0.0, 1.0, 3.0));
-    pObject = new Object("cube.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObject = new Object(strExePath + "\\3D_Resources\\cube.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObject->GenerateTexture(strExePath + "\\3D_Resources\\cube_texture.png");
 
     // configure global opengl state
     // -----------------------------

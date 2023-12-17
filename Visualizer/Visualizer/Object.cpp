@@ -8,15 +8,12 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
+unsigned int Object::textureCount = 0;
+
 // Constructor that takes the file name of the 3D model and the viewport parameters
 Object::Object(const std::string& fileName, int x, int y, int width, int height) 
 {
-    // Declare a color vector
-    glm::vec3 color(0.5f, 0.2f, 0.8f); // a purple color
-    // Declare a size variable
-    int size = 256; // a 256x256 texture
-    // Call the generateColorTexture method
-    generateColorTexture(texture, color, size);
+    texture = textureCount++;
 
     // Generate the vertex array object, vertex buffer objects, and element buffer object
     glGenVertexArrays(1, &VAO);
@@ -54,6 +51,7 @@ void Object::render(const Shader& shader) {
 int Object::getX() const {
     return x;
 }
+
 int Object::getY() const {
     return y;
 }
@@ -148,11 +146,11 @@ void Object::load(const std::string& fileName) {
     delete[] indexArray;
 }
 
-void Object::generateColorTexture(GLuint& text, glm::vec3 color, int size)
+void Object::GenerateColorTexture(glm::vec3 color, int size)
 {
     // Generate and bind the texture
-    glGenTextures(1, &text);
-    glBindTexture(GL_TEXTURE_2D, text);
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
 
     // Set the texture parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -176,6 +174,40 @@ void Object::generateColorTexture(GLuint& text, glm::vec3 color, int size)
 
     // Delete the texture data
     delete[] data;
+}
+
+
+void Object::GenerateTexture(std::string filePath)
+{
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
+    unsigned char* data = stbi_load(filePath.c_str(), &width, &height, &nrChannels, 0);
+    if (data) {
+        GLenum format{};
+        if (nrChannels == 1)
+            format = GL_RED;
+        else if (nrChannels == 3)
+            format = GL_RGB;
+        else if (nrChannels == 4)
+            format = GL_RGBA;
+
+        // Generate and bind the texture
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        // set the texture wrapping parameters
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+        // set texture filtering parameters
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+    else {
+        std::cout << "Failed to load texture: " << filePath << std::endl;
+    }
+    stbi_image_free(data);
 }
 
 void Object::renderScene(const Shader& shader)
