@@ -1,5 +1,6 @@
 ﻿#include "Object.h"
 #include "Camera.h"
+#include "Curl.h"
 
 Camera* pCamera = nullptr;
 
@@ -126,11 +127,15 @@ int main(int argc, char** argv)
 
     glEnable(GL_CULL_FACE);
 
+    CurlRequest request;
 
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
     {
+        std::string response = request.sendGetRequest("http://script.google.com/macros/s/AKfycbx9UdIvGg8l6WHfsOwi_-dKUEFRS3cegk69d0E3P9qSDPCUrOmkYfUwAur7aZgHuVfn/exec"); // modify for script deployment
+        std::cout << response << std::endl;
+
         // per-frame time logic
         // --------------------
         float currentFrame = (float)glfwGetTime();
