@@ -12,7 +12,7 @@ public:
     int getHeight() const;
     GLuint getTexture() const;
 
-    void GenerateColorTexture(glm::vec3 color, int size);
+    void GenerateColorTexture(glm::vec3 color, int alpha, int size);
     void GenerateTexture(std::string filePath);
 
 protected:
@@ -24,5 +24,5 @@ protected:
     int x, y, width, height;
     GLuint texture;
 
-    static unsigned int textureCount;
+    int valueSW, valueSE, valueN;
 };

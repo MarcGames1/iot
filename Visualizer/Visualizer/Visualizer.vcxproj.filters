@@ -43,16 +43,28 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="ShadowMapping.fs">
+    <None Include="..\Debug\Shading\Lamp.fs">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="ShadowMapping.vs">
+    <None Include="..\Debug\Shading\Lamp.vs">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="ShadowMappingDepth.fs">
+    <None Include="..\Debug\Shading\PhongLight.fs">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="ShadowMappingDepth.vs">
+    <None Include="..\Debug\Shading\PhongLight.vs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\Debug\Shading\ShadowMapping.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\Debug\Shading\ShadowMapping.vs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\Debug\Shading\ShadowMappingDepth.fs">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\Debug\Shading\ShadowMappingDepth.vs">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
