@@ -146,7 +146,16 @@ int main(int argc, char** argv)
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        drawSolarPanel(glm::vec3(1.0,3.0,5.0));
+        switch (objectNo)
+        {
+        case 0:
+            drawLightBulb(glm::vec3(0.3));
+            break;
+        case 1:
+            drawSolarPanel(glm::vec3(1.0, 3.0, 5.0));
+            break;
+        default:;
+        }
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         glfwSwapBuffers(window);
@@ -350,6 +359,8 @@ void processInput(GLFWwindow* window)
         int width, height;
         glfwGetWindowSize(window, &width, &height);
         pCamera->Reset(width, height);
+
+        objectNo = 0;
         return;
     }
     else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
@@ -357,6 +368,8 @@ void processInput(GLFWwindow* window)
         int width, height;
         glfwGetWindowSize(window, &width, &height);
         pCamera->Reset(width, height);
+
+        objectNo = 1;
         return;
     }
     else if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
