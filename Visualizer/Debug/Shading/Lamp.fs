@@ -7,6 +7,6 @@ uniform float intensity = 1.0;
 
 void main()
 {
-    vec4 finalColor = vec4(lightColor, intensity);
+    vec4 finalColor = vec4(lightColor, 1.0) * (intensity < 0.1 ? 0.1 : intensity );
     FragColor = finalColor;
 }

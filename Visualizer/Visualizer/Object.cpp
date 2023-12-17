@@ -33,7 +33,26 @@ Object::Object(const std::string& fileName, int x, int y, int width, int height)
 void Object::render(const Shader& shader) {
     glm::mat4 model = glm::mat4();
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0));
-    model = glm::scale(model, glm::vec3(0.75f));
+    model = glm::scale(model, glm::vec3(1.0f));
+    shader.SetMat4("model", model);
+
+    // Bind the vertex array object
+    glBindVertexArray(VAO);
+
+    // Draw the model using the element buffer object
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
+
+    // Unbind the vertex array object
+    glBindVertexArray(0);
+}
+void Object::render(const Shader& shader, glm::vec3 translate, glm::vec3 scale, glm::vec3 degrees)
+{
+    glm::mat4 model = glm::mat4();
+    model = glm::translate(model, translate);
+    model = glm::rotate(model, glm::radians(degrees.y), glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::rotate(model, glm::radians(degrees.x), glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, glm::radians(degrees.z), glm::vec3(0.0f, 0.0f, 1.0f));
+    model = glm::scale(model, scale);
     shader.SetMat4("model", model);
 
     // Bind the vertex array object
@@ -208,21 +227,4 @@ void Object::GenerateTexture(std::string filePath)
         std::cout << "Failed to load texture: " << filePath << std::endl;
     }
     stbi_image_free(data);
-}
-
-void Object::renderScene(const Shader& shader)
-{
-    glm::mat4 model = glm::mat4();
-    model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0));
-    model = glm::scale(model, glm::vec3(1.0f));
-    shader.SetMat4("model", model);
-
-    // Bind the vertex array object
-    glBindVertexArray(VAO);
-
-    // Draw the model using the element buffer object
-    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
-
-    // Unbind the vertex array object
-    glBindVertexArray(0);
 }

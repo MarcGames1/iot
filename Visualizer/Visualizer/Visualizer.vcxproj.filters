@@ -49,12 +49,6 @@
     <None Include="..\Debug\Shading\Lamp.vs">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="..\Debug\Shading\PhongLight.fs">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="..\Debug\Shading\PhongLight.vs">
-      <Filter>Resource Files</Filter>
-    </None>
     <None Include="..\Debug\Shading\ShadowMapping.fs">
       <Filter>Resource Files</Filter>
     </None>

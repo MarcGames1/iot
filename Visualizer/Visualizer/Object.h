@@ -6,6 +6,7 @@ public:
     Object(const std::string& fileName, int x, int y, int width, int height);
     ~Object() = default;
     void render(const Shader& shader);
+    void render(const Shader& shader, glm::vec3 translate, glm::vec3 scale, glm::vec3 rotate);
     int getX() const;
     int getY() const;
     int getWidth() const;
@@ -17,7 +18,6 @@ public:
 
 protected:
     void load(const std::string& fileName);
-    void renderScene(const Shader& shader);
 
     unsigned int VAO, VBO[3], EBO;
     unsigned int indexCount;
