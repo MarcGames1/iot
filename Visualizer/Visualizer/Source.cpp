@@ -20,6 +20,7 @@ Object* pObjectLightBulbBack;
 Object* pObjectSolarPanelTop;
 Object* pObjectSolarPanelBottom;
 Object* pObjectSolarPanelLightSource;
+Object* pObjectSolarPanelFloor;
 
 Shader* shadowMappingShader;
 Shader* shadowMappingDepthShader;
@@ -43,6 +44,16 @@ float fnValue = 2;
 const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
 unsigned int depthMap, depthMapFBO;
 
+glm::mat4 getLightSpaceMatrix(glm::vec3 lightPosition, glm::vec3 lookAt, const float nearPlane, const float farPlane)
+{
+    glm::mat4 lightProjection, lightView;
+    glm::mat4 lightSpaceMatrix;
+    lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, nearPlane, farPlane);
+    lightView = glm::lookAt(lightPosition,lookAt, glm::vec3(0.0, 1.0, 0.0));
+    lightSpaceMatrix = lightProjection * lightView;
+    return lightSpaceMatrix;
+}
+
 void drawLightBulb(glm::vec3 values);
 void drawSolarPanel(glm::vec3 values);
 void drawLed(glm::vec3 values);
@@ -53,7 +64,13 @@ std::mutex mtx;
 const glm::vec3 GetValues()
 {
 #if TEST
-    glm::vec3 result(3.0, 4.5, 1.0);
+    srand(static_cast<unsigned>(time(0))); // seed the random number generator
+
+    float x = static_cast<float>(rand()) / static_cast<float>(RAND_MAX / 5.0);
+    float y = static_cast<float>(rand()) / static_cast<float>(RAND_MAX / 5.0);
+    float z = static_cast<float>(rand()) / static_cast<float>(RAND_MAX / 5.0);
+
+    glm::vec3 result(x, y, z);
 #else
     glm::vec3 result(0.0);
     std::string response = request.sendGetRequest("https://script.google.com/macros/s/AKfycbzaO1d1a8k9s9qCHUjFqODwab2_cS2SM8i4jUT1eOMo1sU52OisJgOWZhysO39GaqF-/exec");
@@ -132,7 +149,7 @@ void modifyValuesThread()
         mtx.lock();
         value = result;
         mtx.unlock();
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 }
 
@@ -188,6 +205,8 @@ int main(int argc, char** argv)
     pObjectSolarPanelTop->GenerateColorTexture(glm::vec3(0.2, 0.2, 0.45), 225, 256);
     pObjectSolarPanelBottom = new Object(strExePath + "\\3D_Resources\\solar_panel_bottom.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
     pObjectSolarPanelBottom->GenerateColorTexture(glm::vec3(0.3, 0.3, 0.3), 225, 256);
+    pObjectSolarPanelFloor = new Object(strExePath + "\\3D_Resources\\solar_panel_floor.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectSolarPanelFloor->GenerateColorTexture(glm::vec3(0.3, 0.4, 0.2), 225, 256);
     pObjectSolarPanelLightSource = new Object(strExePath + "\\3D_Resources\\solar_panel_light_source.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
     pObjectSolarPanelLightSource->GenerateColorTexture(glm::vec3(0.9, 0.9,0.5), 225, 256);
     pObjectLedTop = new Object(strExePath + "\\3D_Resources\\led_top.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
@@ -232,10 +251,6 @@ int main(int argc, char** argv)
     shadowMappingShader->SetInt("diffuseTexture", 0);
     shadowMappingShader->SetInt("shadowMap", 1);
 
-    // lighting info
-    // -------------
-    glm::vec3 lightPos(0.0f, 5.0f, 0.0f);
-
     glEnable(GL_CULL_FACE);
 
     // render loop
@@ -244,6 +259,9 @@ int main(int argc, char** argv)
     {
         // per-frame time logic
         // --------------------
+        float currentFrame = (float)glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
 
         mtx.lock();
         glm::vec3 currentValue = value;
@@ -255,7 +273,7 @@ int main(int argc, char** argv)
 
         // render
         // ------
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         switch (objectNo)
@@ -285,6 +303,13 @@ int main(int argc, char** argv)
     delete pObjectSolarPanelTop;
     delete pObjectSolarPanelBottom;
     delete pObjectSolarPanelLightSource;
+    delete pObjectLedTop;
+    delete pObjectLedBottom;
+    delete pObjectSolarPanelFloor;
+
+    delete shadowMappingShader;
+    delete shadowMappingDepthShader;
+    delete lampShader;
 
     stop_thread = true;
 
@@ -295,25 +320,23 @@ int main(int argc, char** argv)
 void drawLightBulb( glm::vec3 values )
 {
     const float avg = ((values.x + values.y + values.z) / 3 ) / 5.0;
-    const float intensity = avg < 0.5 ? 1.0 - avg : 0.0;
+    const float intensity = avg < 0.3 ? 1.0 : 0.0;
+
+
+    glClearColor(avg, avg, avg, 1.0f);
 
     // lighting info
     // -------------
     glm::vec3 lightPos(0.0f, 1.15f, 0.25f);
 
     // 1. render depth of scene to texture (from light's perspective)
-    glm::mat4 lightProjection, lightView;
-    glm::mat4 lightSpaceMatrix;
-    float near_plane = 1.0f, far_plane = 10.5f;
-    lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
-    lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-    lightSpaceMatrix = lightProjection * lightView;
+    glm::mat4 lightSpaceMatrix = getLightSpaceMatrix(lightPos, glm::vec3(0.0f), 1.0f, 10.5f);
 
     // CUBE, SHADOW MAPPING
 
     // render scene from light's point of view
     shadowMappingDepthShader->Use();
-    shadowMappingDepthShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix);
+    shadowMappingDepthShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix);
 
     glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
     glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
@@ -346,10 +369,12 @@ void drawLightBulb( glm::vec3 values )
     shadowMappingShader->SetMat4("view", view);
     // set light uniforms
     shadowMappingShader->SetVec3("viewPos", pCamera->GetPosition());
-    shadowMappingShader->SetVec3("lightPos", lightPos);
-    shadowMappingShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix);
-    shadowMappingShader->SetFloat("intensity", intensity);
-    shadowMappingShader->SetVec3("lightColor", glm::vec3(1.0, 1.0, 0.1));
+    shadowMappingShader->SetVec3("lights[0].Position", lightPos);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix);
+    shadowMappingShader->SetFloat("lights[0].Intensity", intensity);
+    shadowMappingShader->SetVec3("lights[0].Color", glm::vec3(1.0, 1.0, 0.1));
+    shadowMappingShader->SetVec3("lights[1].Color", glm::vec3(0.0));
+    shadowMappingShader->SetVec3("lights[2].Color", glm::vec3(0.0));
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, pObjectLightBulbBack->getTexture());
     glActiveTexture(GL_TEXTURE1);
@@ -382,18 +407,13 @@ void drawLed(glm::vec3 values)
     glm::vec3 lightPos(0.0f, 1.15f, 0.25f);
 
     // 1. render depth of scene to texture (from light's perspective)
-    glm::mat4 lightProjection, lightView;
-    glm::mat4 lightSpaceMatrix;
-    float near_plane = 1.0f, far_plane = 10.5f;
-    lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
-    lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-    lightSpaceMatrix = lightProjection * lightView;
+    glm::mat4 lightSpaceMatrix = getLightSpaceMatrix(lightPos, glm::vec3(0.0f), 1.0f, 10.5f);
 
     // CUBE, SHADOW MAPPING
 
     // render scene from light's point of view
     shadowMappingDepthShader->Use();
-    shadowMappingDepthShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix);
+    shadowMappingDepthShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix);
 
     glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
     glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
@@ -426,10 +446,13 @@ void drawLed(glm::vec3 values)
     shadowMappingShader->SetMat4("view", view);
     // set light uniforms
     shadowMappingShader->SetVec3("viewPos", pCamera->GetPosition());
-    shadowMappingShader->SetVec3("lightPos", lightPos);
-    shadowMappingShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix);
-    shadowMappingShader->SetFloat("intensity", intensity);
-    shadowMappingShader->SetVec3("lightColor", glm::vec3(5.0, 0.0, 0.1));
+    shadowMappingShader->SetVec3("lights[0].Position", lightPos);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix);
+    shadowMappingShader->SetFloat("lights[0].Intensity", intensity);
+    shadowMappingShader->SetVec3("lights[0].Color", glm::vec3(5.0, 0.0, 0.1));
+    shadowMappingShader->SetVec3("lights[1].Color", glm::vec3(0.0));
+    shadowMappingShader->SetVec3("lights[2].Color", glm::vec3(0.0));
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, pObjectLightBulbBack->getTexture());
     glActiveTexture(GL_TEXTURE1);
@@ -452,14 +475,17 @@ void drawLed(glm::vec3 values)
     pObjectLedTop->render(*lampShader);
 }
 
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+glm::vec3 currentDegrees = glm::vec3(0.0f);
 void drawSolarPanel(glm::vec3 values)
 {
     glm::vec3 triangleEnds[3];
-    triangleEnds[0] = glm::vec3(-2.0f, 1.75f, -1.0f);
-    triangleEnds[1] = glm::vec3(2.0f, 1.75f, -1.5f);
-    triangleEnds[2] = glm::vec3(1.0f, 1.75f, 1.5f);
+    triangleEnds[0] = glm::vec3(-2.0f, 2.0f, -1.0f);
+    triangleEnds[1] = glm::vec3(2.0f, 3.0f, -1.5f);
+    triangleEnds[2] = glm::vec3(1.0f, 2.4f, 1.5f);
 
-    glm::vec3 objectPos = glm::vec3(0.0f); // Position of the object
+    glm::vec3 objectPos = glm::vec3(0.0f, 1.05f, 0.0f); // Position of the object
     float maxIntensity = 0.0f;
     float secondMaxIntensity = 0.0f;
     float minIntensity = 5.0f;
@@ -490,34 +516,51 @@ void drawSolarPanel(glm::vec3 values)
 
     // Convert the direction vector to a rotation in degrees about the x and y axes
     glm::vec3 degrees;
-    degrees.x = glm::degrees(glm::asin(brightestLightDir.y)); // pitch
-    degrees.y = glm::degrees(glm::atan(brightestLightDir.x, brightestLightDir.z)); // yaw
+    degrees.x = glm::degrees(std::atan2(sqrt(brightestLightDir.x * brightestLightDir.x + brightestLightDir.z * brightestLightDir.z), brightestLightDir.y)); // pitch
+    degrees.y = glm::degrees(std::atan2(brightestLightDir.x, brightestLightDir.z)); // yaw
     degrees.z = 0.0f; // No rotation around the z-axis
+
+
+    // Calculate the difference between the current and target degrees
+    glm::vec3 deltaDegrees = degrees - currentDegrees;
+
+    // Calculate the step size for the yaw and pitch
+    glm::vec3 step = glm::normalize(deltaDegrees) * 0.015f;
+
+    // Update the current degrees
+    currentDegrees += step;
+
+    // Ensure the current degrees does not exceed the target degrees
+    currentDegrees.x = glm::clamp(currentDegrees.x, min(currentDegrees.x, degrees.x), max(currentDegrees.x, degrees.x));
+    currentDegrees.y = glm::clamp(currentDegrees.y, min(currentDegrees.y, degrees.y), max(currentDegrees.y, degrees.y));
+
     // Set the light position to the position of the brightest light source
-    glm::vec3 lightPos = brightestLightPos;
 
     // 1. render depth of scene to texture (from light's perspective)
-    glm::mat4 lightProjection, lightView;
-    glm::mat4 lightSpaceMatrix;
-    float near_plane = 1.0f, far_plane = 10.5f;
-    lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
-    lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-    lightSpaceMatrix = lightProjection * lightView;
+    glm::mat4 lightSpaceMatrix1 = getLightSpaceMatrix(brightestLightPos, objectPos, 1.0f, 5.5f);
+    glm::mat4 lightSpaceMatrix2 = getLightSpaceMatrix(secondBrightestLightPos, objectPos, 1.0f, 5.5f);
+    glm::mat4 lightSpaceMatrix3 = getLightSpaceMatrix(leastBrightestLightPos, objectPos, 1.0f, 5.5f);
 
     // CUBE, SHADOW MAPPING
 
     // render scene from light's point of view
     shadowMappingDepthShader->Use();
-    shadowMappingDepthShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix);
+    shadowMappingDepthShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix1);
 
     glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
     glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
     glClear(GL_DEPTH_BUFFER_BIT);
     glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelFloor->getTexture());
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    pObjectSolarPanelFloor->render(*shadowMappingDepthShader);
+    glCullFace(GL_BACK);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelTop->getTexture());
     glEnable(GL_CULL_FACE);
     glCullFace(GL_FRONT);
-    pObjectSolarPanelTop->render(*shadowMappingDepthShader, glm::vec3(0.0, 1.3, 0.0), glm::vec3(1.0), degrees);
+    pObjectSolarPanelTop->render(*shadowMappingDepthShader, objectPos, glm::vec3(1.0), currentDegrees);
     glCullFace(GL_BACK);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelBottom->getTexture());
@@ -532,8 +575,6 @@ void drawSolarPanel(glm::vec3 values)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // 2. render scene as normal using the generated depth/shadow map 
-    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     shadowMappingShader->Use();
     glm::mat4 projection = pCamera->GetProjectionMatrix();
     glm::mat4 view = pCamera->GetViewMatrix();
@@ -541,33 +582,49 @@ void drawSolarPanel(glm::vec3 values)
     shadowMappingShader->SetMat4("view", view);
     // set light uniforms
     shadowMappingShader->SetVec3("viewPos", pCamera->GetPosition());
-    shadowMappingShader->SetVec3("lightPos", lightPos);
-    shadowMappingShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix);
-    shadowMappingShader->SetFloat("intensity", 1.0);
-    shadowMappingShader->SetVec3("lightColor", glm::vec3(1.0, 1.0, 0.8));
+    shadowMappingShader->SetVec3("lights[0].Position", brightestLightPos);
+    shadowMappingShader->SetVec3("lights[1].Position", secondBrightestLightPos);
+    shadowMappingShader->SetVec3("lights[2].Position", leastBrightestLightPos);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix1);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[1]", lightSpaceMatrix2);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[2]", lightSpaceMatrix3);
+    shadowMappingShader->SetFloat("lights[0].Intensity", maxIntensity);
+    shadowMappingShader->SetFloat("lights[1].Intensity", secondMaxIntensity);
+    shadowMappingShader->SetFloat("lights[2].Intensity", minIntensity);
+    shadowMappingShader->SetVec3("lights[0].Color", glm::vec3(0.2, 1.0, 0.2));
+    shadowMappingShader->SetVec3("lights[1].Color", glm::vec3(0.75, 0.2, 0.2));
+    shadowMappingShader->SetVec3("lights[2].Color", glm::vec3(0.2, 0.2, 0.75));
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelTop->getTexture());
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, depthMap);
     glDisable(GL_CULL_FACE);
-    pObjectSolarPanelTop->render(*shadowMappingShader, glm::vec3(0.0, 1.3, 0.0), glm::vec3(1.0), degrees);
+    pObjectSolarPanelTop->render(*shadowMappingShader,objectPos, glm::vec3(1.0), currentDegrees);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelBottom->getTexture());
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, depthMap);
     glDisable(GL_CULL_FACE);
     pObjectSolarPanelBottom->render(*shadowMappingShader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelFloor->getTexture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glDisable(GL_CULL_FACE);
+    pObjectSolarPanelFloor->render(*shadowMappingShader);
 
     // also draw the lamp object
     lampShader->Use();
     lampShader->SetMat4("projection", pCamera->GetProjectionMatrix());
     lampShader->SetMat4("view", pCamera->GetViewMatrix());
-    lampShader->SetFloat("intensity", 1.0);
-    lampShader->SetVec3("lightColor", glm::vec3(1.0, 1.0, 0.3));
+    lampShader->SetFloat("intensity", maxIntensity);
+    lampShader->SetVec3("lightColor", glm::vec3(0.4, 1.0, 0.4));
     pObjectSolarPanelLightSource->render(*lampShader, brightestLightPos,glm::vec3(1.0),glm::vec3(0.0));
-    lampShader->SetFloat("intensity", 0.66);
+    lampShader->SetFloat("intensity", secondMaxIntensity);
+    lampShader->SetVec3("lightColor", glm::vec3(0.75, 0.4, 0.4));
     pObjectSolarPanelLightSource->render(*lampShader, secondBrightestLightPos, glm::vec3(1.0), glm::vec3(0.0));
-    lampShader->SetFloat("intensity", 0.33);
+    lampShader->SetFloat("intensity", minIntensity);
+    lampShader->SetVec3("lightColor", glm::vec3(0.4, 0.4, 0.75));
     pObjectSolarPanelLightSource->render(*lampShader, leastBrightestLightPos, glm::vec3(1.0), glm::vec3(0.0));
 }
 
