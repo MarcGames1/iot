@@ -8,7 +8,6 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-unsigned int Object::textureCount = 0;
 
 // Constructor that takes the file name of the 3D model and the viewport parameters
 Object::Object(const std::string& fileName, int x, int y, int width, int height) 
@@ -34,7 +33,26 @@ Object::Object(const std::string& fileName, int x, int y, int width, int height)
 void Object::render(const Shader& shader) {
     glm::mat4 model = glm::mat4();
     model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0));
-    model = glm::scale(model, glm::vec3(0.75f));
+    model = glm::scale(model, glm::vec3(1.0f));
+    shader.SetMat4("model", model);
+
+    // Bind the vertex array object
+    glBindVertexArray(VAO);
+
+    // Draw the model using the element buffer object
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
+
+    // Unbind the vertex array object
+    glBindVertexArray(0);
+}
+void Object::render(const Shader& shader, glm::vec3 translate, glm::vec3 scale, glm::vec3 degrees)
+{
+    glm::mat4 model = glm::mat4();
+    model = glm::translate(model, translate);
+    model = glm::rotate(model, glm::radians(degrees.y), glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::rotate(model, glm::radians(degrees.x), glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, glm::radians(degrees.z), glm::vec3(0.0f, 0.0f, 1.0f));
+    model = glm::scale(model, scale);
     shader.SetMat4("model", model);
 
     // Bind the vertex array object
@@ -146,7 +164,7 @@ void Object::load(const std::string& fileName) {
     delete[] indexArray;
 }
 
-void Object::GenerateColorTexture(glm::vec3 color, int size)
+void Object::GenerateColorTexture(glm::vec3 color, int alpha, int size)
 {
     // Generate and bind the texture
     glGenTextures(1, &texture);
@@ -159,17 +177,18 @@ void Object::GenerateColorTexture(glm::vec3 color, int size)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     // Allocate memory for the texture data
-    unsigned char* data = new unsigned char[3 * size * size];
+    unsigned char* data = new unsigned char[4 * size * size]; // Change 3 to 4
 
-    // Fill the texture data with the color
+    // Fill the texture data with the color and alpha
     for (int i = 0; i < size * size; i++) {
-        data[i * 3] = (unsigned char)(color.x * 255.0f);
-        data[i * 3 + 1] = (unsigned char)(color.y * 255.0f);
-        data[i * 3 + 2] = (unsigned char)(color.z * 255.0f);
+        data[i * 4] = (unsigned char)(color.x * 255.0f);
+        data[i * 4 + 1] = (unsigned char)(color.y * 255.0f);
+        data[i * 4 + 2] = (unsigned char)(color.z * 255.0f);
+        data[i * 4 + 3] = (unsigned char)(alpha); // Add alpha channel
     }
 
     // Upload the texture data and generate mipmaps
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size, size, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, data); // Change GL_RGB to GL_RGBA
     glGenerateMipmap(GL_TEXTURE_2D);
 
     // Delete the texture data
@@ -208,21 +227,4 @@ void Object::GenerateTexture(std::string filePath)
         std::cout << "Failed to load texture: " << filePath << std::endl;
     }
     stbi_image_free(data);
-}
-
-void Object::renderScene(const Shader& shader)
-{
-    glm::mat4 model = glm::mat4();
-    model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0));
-    model = glm::scale(model, glm::vec3(0.75f));
-    shader.SetMat4("model", model);
-
-    // Bind the vertex array object
-    glBindVertexArray(VAO);
-
-    // Draw the model using the element buffer object
-    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
-
-    // Unbind the vertex array object
-    glBindVertexArray(0);
 }

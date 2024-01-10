@@ -82,7 +82,7 @@
   </PropertyGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(SolutionDir)..\_external\freeglut\include;$(SolutionDir)..\_external\stb-master;$(SolutionDir)..\_external\glew-2.1.0\include;$(SolutionDir);$(SolutionDir)..\_external\glm;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\_external\;$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(SolutionDir)..\_external\freeglut\include;$(SolutionDir)..\_external\stb-master;$(SolutionDir)..\_external\glew-2.1.0\include;$(SolutionDir);$(SolutionDir)..\_external\glm;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Work\IoT\Repo\_external\glfw-3.3.8.bin.WIN32\lib-vc2022;C:\Work\IoT\Repo\_external\glew-2.1.0\lib\Release\Win32;C:\Work\IoT\Repo\_external\freeglut\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -91,7 +91,7 @@
     <LibraryPath>$(SolutionDir)..\_external\freeglut\lib;$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\lib-vc2022;$(SolutionDir)..\_external\glew-2.1.0\lib\Release\Win32;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(SolutionDir)..\_external\freeglut\include;$(SolutionDir)..\_external\stb-master;$(SolutionDir)..\_external\glew-2.1.0\include;$(SolutionDir);$(SolutionDir)..\_external\glm;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\_external\;$(SolutionDir)..\_external\glfw-3.3.8.bin.WIN32\include\GLFW;$(SolutionDir)..\_external\freeglut\include;$(SolutionDir)..\_external\stb-master;$(SolutionDir)..\_external\glew-2.1.0\include;$(SolutionDir);$(SolutionDir)..\_external\glm;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Work\IoT\Repo\_external\glfw-3.3.8.bin.WIN32\lib-vc2022;C:\Work\IoT\Repo\_external\glew-2.1.0\lib\Release\Win32;C:\Work\IoT\Repo\_external\freeglut\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
@@ -157,6 +157,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="Curl.cpp" />
     <ClCompile Include="Object.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
@@ -170,6 +171,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
     </ClInclude>
+    <ClInclude Include="Curl.h" />
     <ClInclude Include="Object.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
@@ -180,19 +182,27 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="ShadowMapping.fs">
+    <None Include="..\Debug\Shading\Lamp.fs">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </None>
-    <None Include="ShadowMapping.vs">
+    <None Include="..\Debug\Shading\Lamp.vs">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </None>
-    <None Include="ShadowMappingDepth.fs">
+    <None Include="..\Debug\Shading\ShadowMapping.fs">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </None>
-    <None Include="ShadowMappingDepth.vs">
+    <None Include="..\Debug\Shading\ShadowMapping.vs">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </None>
+    <None Include="..\Debug\Shading\ShadowMappingDepth.fs">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </None>
+    <None Include="..\Debug\Shading\ShadowMappingDepth.vs">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </None>

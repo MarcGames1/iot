@@ -6,9 +6,9 @@
 #include <sstream>
 #include <iostream>
 
-Shader::Shader(const char* vertexPath, const char* fragmentPath)
+Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath)
 {
-    Init(vertexPath, fragmentPath);
+    Init(vertexPath.c_str(), fragmentPath.c_str());
 }
 
 Shader::~Shader()

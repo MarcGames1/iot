@@ -1,20 +1,166 @@
 ﻿#include "Object.h"
 #include "Camera.h"
+#include "Curl.h"
+#include <nlohmann/json.hpp>
+#include <chrono>
+#include <ctime> 
+#include <mutex>
+#include <thread>
+
+
+#define TEST 1
 
 Camera* pCamera = nullptr;
-Object* pObject = nullptr;
+
+Object* pObjectLightBulbTop;
+Object* pObjectLightBulbBottom;
+Object* pObjectLedTop;
+Object* pObjectLedBottom;
+Object* pObjectLightBulbBack;
+Object* pObjectSolarPanelTop;
+Object* pObjectSolarPanelBottom;
+Object* pObjectSolarPanelLightSource;
+Object* pObjectSolarPanelFloor;
+
+Shader* shadowMappingShader;
+Shader* shadowMappingDepthShader;
+Shader* lampShader;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 
+int objectNo = 0;
+
 // timing
 double deltaTime = 0.0f;    // time between current frame and last frame
 double lastFrame = 0.0f;
 
+float fKaValue = 0.2;
+float fKdValue = 0.5;
+float fnValue = 2;
+
+const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
+unsigned int depthMap, depthMapFBO;
+
+glm::mat4 getLightSpaceMatrix(glm::vec3 lightPosition, glm::vec3 lookAt, const float nearPlane, const float farPlane)
+{
+    glm::mat4 lightProjection, lightView;
+    glm::mat4 lightSpaceMatrix;
+    lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, nearPlane, farPlane);
+    lightView = glm::lookAt(lightPosition,lookAt, glm::vec3(0.0, 1.0, 0.0));
+    lightSpaceMatrix = lightProjection * lightView;
+    return lightSpaceMatrix;
+}
+
+void drawLightBulb(glm::vec3 values);
+void drawSolarPanel(glm::vec3 values);
+void drawLed(glm::vec3 values);
+
+CurlRequest request;
+glm::vec3 value(0.0);
+std::mutex mtx;
+const glm::vec3 GetValues()
+{
+#if TEST
+    srand(static_cast<unsigned>(time(0))); // seed the random number generator
+
+    float x = static_cast<float>(rand()) / static_cast<float>(RAND_MAX / 5.0);
+    float y = static_cast<float>(rand()) / static_cast<float>(RAND_MAX / 5.0);
+    float z = static_cast<float>(rand()) / static_cast<float>(RAND_MAX / 5.0);
+
+    glm::vec3 result(x, y, z);
+#else
+    glm::vec3 result(0.0);
+    std::string response = request.sendGetRequest("https://script.google.com/macros/s/AKfycbzaO1d1a8k9s9qCHUjFqODwab2_cS2SM8i4jUT1eOMo1sU52OisJgOWZhysO39GaqF-/exec");
+    // Parse the JSON string
+    // Check if the JSON string is parsable
+    nlohmann::json data;
+    try {
+        data = nlohmann::json::parse(response);
+    }
+    catch (nlohmann::json::parse_error& e) {
+        std::cerr << "JSON parse error: " << e.what() << '\n';
+        return glm::vec3(1.0);
+    }
+
+    // Create a vector to hold the data
+    std::vector<std::vector<std::string>> rows;
+
+    // Iterate over the JSON array and add each row to the vector
+    for (nlohmann::json::iterator it = data.begin(); it != data.end(); ++it) {
+        std::vector<std::string> row;
+        for (nlohmann::json::iterator jt = it->begin(); jt != it->end(); ++jt) {
+            row.push_back(*jt);
+        }
+        rows.push_back(row);
+    }
+
+    // Print the data
+    float x = 0., y = 0., z = 0.;
+    for (const auto& row : rows) {
+        int j = 0;
+        for (const auto& cell : row) {
+            float value;
+            try {
+                value = std::stof(cell);
+            }
+            catch (const std::invalid_argument& ia) {
+                value = 0.0f;
+            }
+            catch (const std::out_of_range& oor) {
+                value = 0.0f;
+            }
+            switch (j)
+            {
+            case 0:
+                result = result + glm::vec3(value, 0.0f, 0.0f);
+                j++;
+                break;
+            case 1:
+                result = result + glm::vec3(0.0f, value, 0.0f);
+                j++;
+                break;
+            case 2:
+                result = result + glm::vec3(0.0f, 0.0f, value);
+                j++;
+                break;
+            default:
+                j = 0;
+                break;
+            }
+        }
+    }
+    result = glm::vec3(result.x / rows.size(), result.y / rows.size(), result.z / rows.size());
+#endif
+
+    std::cout << result.x<<" "<<result.y<<" "<<result.z << std::endl;
+    return result;
+}
+
+
+std::atomic<bool> stop_thread(false);
+
+void modifyValuesThread()
+{
+    while (!stop_thread) {
+        glm::vec3 result = GetValues();
+        mtx.lock();
+        value = result;
+        mtx.unlock();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+    }
+}
+
+
 int main(int argc, char** argv)
 {
+    std::thread t(modifyValuesThread);
+    t.detach();
+
+    textureCount = 0;
+
     std::string strFullExeFileName = argv[0];
     std::string strExePath;
     const size_t last_slash_idx = strFullExeFileName.rfind('\\');
@@ -29,7 +175,7 @@ int main(int argc, char** argv)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // glfw window creation
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Lab8 - Maparea umbrelor", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Simulator", NULL, NULL);
     if (window == NULL) {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -47,9 +193,26 @@ int main(int argc, char** argv)
     glewInit();
 
     // Create camera
-    pCamera = new Camera(SCR_WIDTH, SCR_HEIGHT, glm::vec3(0.0, 1.0, 3.0));
-    pObject = new Object(strExePath + "\\3D_Resources\\cube.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
-    pObject->GenerateTexture(strExePath + "\\3D_Resources\\cube_texture.png");
+    pCamera = new Camera(SCR_WIDTH, SCR_HEIGHT, glm::vec3(0.0, 1.0, 5.0));
+
+    pObjectLightBulbTop = new Object(strExePath + "\\3D_Resources\\light_bulb_top.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectLightBulbTop->GenerateColorTexture(glm::vec3(0.2, 0.2, 0.0), 225, 256);
+    pObjectLightBulbBottom = new Object(strExePath + "\\3D_Resources\\light_bulb_bottom.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectLightBulbBottom->GenerateColorTexture(glm::vec3(0.4, 0.4, 0.4), 225, 256);
+    pObjectLightBulbBack = new Object(strExePath + "\\3D_Resources\\light_bulb_back.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectLightBulbBack->GenerateColorTexture(glm::vec3(0.315, 0.315, 0.315), 225, 256);
+    pObjectSolarPanelTop = new Object(strExePath + "\\3D_Resources\\solar_panel_top.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectSolarPanelTop->GenerateColorTexture(glm::vec3(0.2, 0.2, 0.45), 225, 256);
+    pObjectSolarPanelBottom = new Object(strExePath + "\\3D_Resources\\solar_panel_bottom.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectSolarPanelBottom->GenerateColorTexture(glm::vec3(0.3, 0.3, 0.3), 225, 256);
+    pObjectSolarPanelFloor = new Object(strExePath + "\\3D_Resources\\solar_panel_floor.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectSolarPanelFloor->GenerateColorTexture(glm::vec3(0.3, 0.4, 0.2), 225, 256);
+    pObjectSolarPanelLightSource = new Object(strExePath + "\\3D_Resources\\solar_panel_light_source.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectSolarPanelLightSource->GenerateColorTexture(glm::vec3(0.9, 0.9,0.5), 225, 256);
+    pObjectLedTop = new Object(strExePath + "\\3D_Resources\\led_top.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectLedTop->GenerateColorTexture(glm::vec3(0.9, 0.0, 0.1), 225, 256);
+    pObjectLedBottom = new Object(strExePath + "\\3D_Resources\\led_bottom.obj", 0, 0, SCR_WIDTH, SCR_HEIGHT);
+    pObjectLedBottom->GenerateColorTexture(glm::vec3(0.4, 0.4, 0.4), 225, 256);
 
     // configure global opengl state
     // -----------------------------
@@ -57,16 +220,14 @@ int main(int argc, char** argv)
 
     // build and compile shaders
     // -------------------------
-    Shader shadowMappingShader("ShadowMapping.vs", "ShadowMapping.fs");
-    Shader shadowMappingDepthShader("ShadowMappingDepth.vs", "ShadowMappingDepth.fs");
+    shadowMappingShader = new Shader(strExePath + "\\Shading\\ShadowMapping.vs", strExePath + "\\Shading\\ShadowMapping.fs");
+    shadowMappingDepthShader = new Shader(strExePath + "\\Shading\\ShadowMappingDepth.vs", strExePath + "\\Shading\\ShadowMappingDepth.fs");
+    lampShader = new Shader(strExePath + "\\Shading\\Lamp.vs", strExePath + "\\Shading\\Lamp.fs");
 
     // configure depth map FBO
     // -----------------------
-    const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
-    unsigned int depthMapFBO;
     glGenFramebuffers(1, &depthMapFBO);
     // create depth texture
-    unsigned int depthMap;
     glGenTextures(1, &depthMap);
     glBindTexture(GL_TEXTURE_2D, depthMap);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
@@ -86,16 +247,11 @@ int main(int argc, char** argv)
 
     // shader configuration
     // --------------------
-    shadowMappingShader.Use();
-    shadowMappingShader.SetInt("diffuseTexture", 0);
-    shadowMappingShader.SetInt("shadowMap", 1);
-
-    // lighting info
-    // -------------
-    glm::vec3 lightPos(-2.0f, 4.0f, -1.0f);
+    shadowMappingShader->Use();
+    shadowMappingShader->SetInt("diffuseTexture", 0);
+    shadowMappingShader->SetInt("shadowMap", 1);
 
     glEnable(GL_CULL_FACE);
-
 
     // render loop
     // -----------
@@ -107,60 +263,32 @@ int main(int argc, char** argv)
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
+        mtx.lock();
+        glm::vec3 currentValue = value;
+        mtx.unlock();
+
         // input
         // -----
         processInput(window);
 
         // render
         // ------
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // 1. render depth of scene to texture (from light's perspective)
-        glm::mat4 lightProjection, lightView;
-        glm::mat4 lightSpaceMatrix;
-        float near_plane = 1.0f, far_plane = 7.5f;
-        lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
-        lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
-        lightSpaceMatrix = lightProjection * lightView;
-
-        // render scene from light's point of view
-        shadowMappingDepthShader.Use();
-        shadowMappingDepthShader.SetMat4("lightSpaceMatrix", lightSpaceMatrix);
-
-        glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-        glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-        glClear(GL_DEPTH_BUFFER_BIT);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, pObject->getTexture());
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_FRONT);
-        pObject->render(shadowMappingDepthShader);
-        glCullFace(GL_BACK);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        // reset viewport
-        glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // 2. render scene as normal using the generated depth/shadow map 
-        glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        shadowMappingShader.Use();
-        glm::mat4 projection = pCamera->GetProjectionMatrix();
-        glm::mat4 view = pCamera->GetViewMatrix();
-        shadowMappingShader.SetMat4("projection", projection);
-        shadowMappingShader.SetMat4("view", view);
-        // set light uniforms
-        shadowMappingShader.SetVec3("viewPos", pCamera->GetPosition());
-        shadowMappingShader.SetVec3("lightPos", lightPos);
-        shadowMappingShader.SetMat4("lightSpaceMatrix", lightSpaceMatrix);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, pObject->getTexture());
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, depthMap);
-        glDisable(GL_CULL_FACE);
-        pObject->render(shadowMappingShader);
+        switch (objectNo)
+        {
+        case 0:
+            drawLightBulb(currentValue);
+            break;
+        case 1:
+            drawLed(currentValue);
+            break;
+        case 2:
+            drawSolarPanel(currentValue);
+            break;
+        default:;
+        }
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         glfwSwapBuffers(window);
@@ -169,18 +297,370 @@ int main(int argc, char** argv)
 
     // optional: de-allocate all resources once they've outlived their purpose:
     delete pCamera;
-    delete pObject;
+    delete pObjectLightBulbTop;
+    delete pObjectLightBulbBottom;
+    delete pObjectLightBulbBack;
+    delete pObjectSolarPanelTop;
+    delete pObjectSolarPanelBottom;
+    delete pObjectSolarPanelLightSource;
+    delete pObjectLedTop;
+    delete pObjectLedBottom;
+    delete pObjectSolarPanelFloor;
+
+    delete shadowMappingShader;
+    delete shadowMappingDepthShader;
+    delete lampShader;
+
+    stop_thread = true;
 
     glfwTerminate();
     return 0;
 }
 
+void drawLightBulb( glm::vec3 values )
+{
+    const float avg = ((values.x + values.y + values.z) / 3 ) / 5.0;
+    const float intensity = avg < 0.3 ? 1.0 : 0.0;
+
+
+    glClearColor(avg, avg, avg, 1.0f);
+
+    // lighting info
+    // -------------
+    glm::vec3 lightPos(0.0f, 1.15f, 0.25f);
+
+    // 1. render depth of scene to texture (from light's perspective)
+    glm::mat4 lightSpaceMatrix = getLightSpaceMatrix(lightPos, glm::vec3(0.0f), 1.0f, 10.5f);
+
+    // CUBE, SHADOW MAPPING
+
+    // render scene from light's point of view
+    shadowMappingDepthShader->Use();
+    shadowMappingDepthShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix);
+
+    glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectLightBulbBack->getTexture());
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    pObjectLightBulbBack->render(*shadowMappingDepthShader);
+    glCullFace(GL_BACK);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectLightBulbBottom->getTexture());
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    pObjectLightBulbBottom->render(*shadowMappingDepthShader);
+    glCullFace(GL_BACK);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // reset viewport
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // 2. render scene as normal using the generated depth/shadow map 
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    shadowMappingShader->Use();
+    glm::mat4 projection = pCamera->GetProjectionMatrix();
+    glm::mat4 view = pCamera->GetViewMatrix();
+    shadowMappingShader->SetMat4("projection", projection);
+    shadowMappingShader->SetMat4("view", view);
+    // set light uniforms
+    shadowMappingShader->SetVec3("viewPos", pCamera->GetPosition());
+    shadowMappingShader->SetVec3("lights[0].Position", lightPos);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix);
+    shadowMappingShader->SetFloat("lights[0].Intensity", intensity);
+    shadowMappingShader->SetVec3("lights[0].Color", glm::vec3(1.0, 1.0, 0.1));
+    shadowMappingShader->SetVec3("lights[1].Color", glm::vec3(0.0));
+    shadowMappingShader->SetVec3("lights[2].Color", glm::vec3(0.0));
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectLightBulbBack->getTexture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glDisable(GL_CULL_FACE);
+    pObjectLightBulbBack->render(*shadowMappingShader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectLightBulbBottom->getTexture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glDisable(GL_CULL_FACE);
+    pObjectLightBulbBottom->render(*shadowMappingShader);
+
+    // also draw the lamp object
+    lampShader->Use();
+    lampShader->SetMat4("projection", pCamera->GetProjectionMatrix());
+    lampShader->SetMat4("view", pCamera->GetViewMatrix());
+    lampShader->SetFloat("intensity", intensity);
+    lampShader->SetVec3("lightColor", glm::vec3(1.0, 1.0, 0.1));
+    pObjectLightBulbTop->render(*lampShader);
+}
+
+void drawLed(glm::vec3 values)
+{
+    const float avg = ((values.x + values.y + values.z) / 3) / 5.0;
+    const float intensity =  1.0 - avg;
+
+    // lighting info
+    // -------------
+    glm::vec3 lightPos(0.0f, 1.15f, 0.25f);
+
+    // 1. render depth of scene to texture (from light's perspective)
+    glm::mat4 lightSpaceMatrix = getLightSpaceMatrix(lightPos, glm::vec3(0.0f), 1.0f, 10.5f);
+
+    // CUBE, SHADOW MAPPING
+
+    // render scene from light's point of view
+    shadowMappingDepthShader->Use();
+    shadowMappingDepthShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix);
+
+    glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectLightBulbBack->getTexture());
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    pObjectLightBulbBack->render(*shadowMappingDepthShader);
+    glCullFace(GL_BACK);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectLedBottom->getTexture());
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    pObjectLedBottom->render(*shadowMappingDepthShader);
+    glCullFace(GL_BACK);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // reset viewport
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // 2. render scene as normal using the generated depth/shadow map 
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    shadowMappingShader->Use();
+    glm::mat4 projection = pCamera->GetProjectionMatrix();
+    glm::mat4 view = pCamera->GetViewMatrix();
+    shadowMappingShader->SetMat4("projection", projection);
+    shadowMappingShader->SetMat4("view", view);
+    // set light uniforms
+    shadowMappingShader->SetVec3("viewPos", pCamera->GetPosition());
+    shadowMappingShader->SetVec3("lights[0].Position", lightPos);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix);
+    shadowMappingShader->SetFloat("lights[0].Intensity", intensity);
+    shadowMappingShader->SetVec3("lights[0].Color", glm::vec3(5.0, 0.0, 0.1));
+    shadowMappingShader->SetVec3("lights[1].Color", glm::vec3(0.0));
+    shadowMappingShader->SetVec3("lights[2].Color", glm::vec3(0.0));
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectLightBulbBack->getTexture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glDisable(GL_CULL_FACE);
+    pObjectLightBulbBack->render(*shadowMappingShader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectLedBottom->getTexture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glDisable(GL_CULL_FACE);
+    pObjectLedBottom->render(*shadowMappingShader);
+
+    // also draw the lamp object
+    lampShader->Use();
+    lampShader->SetMat4("projection", pCamera->GetProjectionMatrix());
+    lampShader->SetMat4("view", pCamera->GetViewMatrix());
+    lampShader->SetFloat("intensity", intensity);
+    lampShader->SetVec3("lightColor", glm::vec3(9.0, 0.0, 0.1));
+    pObjectLedTop->render(*lampShader);
+}
+
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+glm::vec3 currentDegrees = glm::vec3(0.0f);
+void drawSolarPanel(glm::vec3 values)
+{
+    glm::vec3 triangleEnds[3];
+    triangleEnds[0] = glm::vec3(-2.0f, 2.0f, -1.0f);
+    triangleEnds[1] = glm::vec3(2.0f, 3.0f, -1.5f);
+    triangleEnds[2] = glm::vec3(1.0f, 2.4f, 1.5f);
+
+    glm::vec3 objectPos = glm::vec3(0.0f, 1.05f, 0.0f); // Position of the object
+    float maxIntensity = 0.0f;
+    float secondMaxIntensity = 0.0f;
+    float minIntensity = 5.0f;
+    glm::vec3 brightestLightDir;
+    glm::vec3 brightestLightPos;
+    glm::vec3 secondBrightestLightPos;
+    glm::vec3 leastBrightestLightPos;
+
+    for (int i = 0; i < 3; i++) {
+        glm::vec3 lightDir = glm::normalize(triangleEnds[i] - objectPos);
+        float intensity = values[i] / glm::length(triangleEnds[i] - objectPos);
+        if (intensity > maxIntensity) {
+            secondMaxIntensity = maxIntensity;
+            secondBrightestLightPos = brightestLightPos;
+            maxIntensity = intensity;
+            brightestLightDir = lightDir;
+            brightestLightPos = triangleEnds[i];
+        }
+        else if (intensity > secondMaxIntensity) {
+            secondMaxIntensity = intensity;
+            secondBrightestLightPos = triangleEnds[i];
+        }
+        if (intensity < minIntensity) {
+            minIntensity = intensity;
+            leastBrightestLightPos = triangleEnds[i];
+        }
+    }
+
+    // Convert the direction vector to a rotation in degrees about the x and y axes
+    glm::vec3 degrees;
+    degrees.x = glm::degrees(std::atan2(sqrt(brightestLightDir.x * brightestLightDir.x + brightestLightDir.z * brightestLightDir.z), brightestLightDir.y)); // pitch
+    degrees.y = glm::degrees(std::atan2(brightestLightDir.x, brightestLightDir.z)); // yaw
+    degrees.z = 0.0f; // No rotation around the z-axis
+
+
+    // Calculate the difference between the current and target degrees
+    glm::vec3 deltaDegrees = degrees - currentDegrees;
+
+    // Calculate the step size for the yaw and pitch
+    glm::vec3 step = glm::normalize(deltaDegrees) * 0.015f;
+
+    // Update the current degrees
+    currentDegrees += step;
+
+    // Ensure the current degrees does not exceed the target degrees
+    currentDegrees.x = glm::clamp(currentDegrees.x, min(currentDegrees.x, degrees.x), max(currentDegrees.x, degrees.x));
+    currentDegrees.y = glm::clamp(currentDegrees.y, min(currentDegrees.y, degrees.y), max(currentDegrees.y, degrees.y));
+
+    // Set the light position to the position of the brightest light source
+
+    // 1. render depth of scene to texture (from light's perspective)
+    glm::mat4 lightSpaceMatrix1 = getLightSpaceMatrix(brightestLightPos, objectPos, 1.0f, 5.5f);
+    glm::mat4 lightSpaceMatrix2 = getLightSpaceMatrix(secondBrightestLightPos, objectPos, 1.0f, 5.5f);
+    glm::mat4 lightSpaceMatrix3 = getLightSpaceMatrix(leastBrightestLightPos, objectPos, 1.0f, 5.5f);
+
+    // CUBE, SHADOW MAPPING
+
+    // render scene from light's point of view
+    shadowMappingDepthShader->Use();
+    shadowMappingDepthShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix1);
+
+    glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelFloor->getTexture());
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    pObjectSolarPanelFloor->render(*shadowMappingDepthShader);
+    glCullFace(GL_BACK);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelTop->getTexture());
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    pObjectSolarPanelTop->render(*shadowMappingDepthShader, objectPos, glm::vec3(1.0), currentDegrees);
+    glCullFace(GL_BACK);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelBottom->getTexture());
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    pObjectSolarPanelBottom->render(*shadowMappingDepthShader);
+    glCullFace(GL_BACK);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // reset viewport
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // 2. render scene as normal using the generated depth/shadow map 
+    shadowMappingShader->Use();
+    glm::mat4 projection = pCamera->GetProjectionMatrix();
+    glm::mat4 view = pCamera->GetViewMatrix();
+    shadowMappingShader->SetMat4("projection", projection);
+    shadowMappingShader->SetMat4("view", view);
+    // set light uniforms
+    shadowMappingShader->SetVec3("viewPos", pCamera->GetPosition());
+    shadowMappingShader->SetVec3("lights[0].Position", brightestLightPos);
+    shadowMappingShader->SetVec3("lights[1].Position", secondBrightestLightPos);
+    shadowMappingShader->SetVec3("lights[2].Position", leastBrightestLightPos);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[0]", lightSpaceMatrix1);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[1]", lightSpaceMatrix2);
+    shadowMappingShader->SetMat4("lightSpaceMatrix[2]", lightSpaceMatrix3);
+    shadowMappingShader->SetFloat("lights[0].Intensity", maxIntensity);
+    shadowMappingShader->SetFloat("lights[1].Intensity", secondMaxIntensity);
+    shadowMappingShader->SetFloat("lights[2].Intensity", minIntensity);
+    shadowMappingShader->SetVec3("lights[0].Color", glm::vec3(0.2, 1.0, 0.2));
+    shadowMappingShader->SetVec3("lights[1].Color", glm::vec3(0.75, 0.2, 0.2));
+    shadowMappingShader->SetVec3("lights[2].Color", glm::vec3(0.2, 0.2, 0.75));
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelTop->getTexture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glDisable(GL_CULL_FACE);
+    pObjectSolarPanelTop->render(*shadowMappingShader,objectPos, glm::vec3(1.0), currentDegrees);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelBottom->getTexture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glDisable(GL_CULL_FACE);
+    pObjectSolarPanelBottom->render(*shadowMappingShader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, pObjectSolarPanelFloor->getTexture());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glDisable(GL_CULL_FACE);
+    pObjectSolarPanelFloor->render(*shadowMappingShader);
+
+    // also draw the lamp object
+    lampShader->Use();
+    lampShader->SetMat4("projection", pCamera->GetProjectionMatrix());
+    lampShader->SetMat4("view", pCamera->GetViewMatrix());
+    lampShader->SetFloat("intensity", maxIntensity);
+    lampShader->SetVec3("lightColor", glm::vec3(0.4, 1.0, 0.4));
+    pObjectSolarPanelLightSource->render(*lampShader, brightestLightPos,glm::vec3(1.0),glm::vec3(0.0));
+    lampShader->SetFloat("intensity", secondMaxIntensity);
+    lampShader->SetVec3("lightColor", glm::vec3(0.75, 0.4, 0.4));
+    pObjectSolarPanelLightSource->render(*lampShader, secondBrightestLightPos, glm::vec3(1.0), glm::vec3(0.0));
+    lampShader->SetFloat("intensity", minIntensity);
+    lampShader->SetVec3("lightColor", glm::vec3(0.4, 0.4, 0.75));
+    pObjectSolarPanelLightSource->render(*lampShader, leastBrightestLightPos, glm::vec3(1.0), glm::vec3(0.0));
+}
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
+        glfwSetWindowShouldClose(window, true);    
+    
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
+    {
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        pCamera->Reset(width, height);
+
+        objectNo = 0;
+        return;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
+    {
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        pCamera->Reset(width, height);
+
+        objectNo = 1;
+        return;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
+    {
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        pCamera->Reset(width, height);
+
+        objectNo = 2;
+        return;
+    }
 
     if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
         pCamera->ProcessKeyboard(FORWARD, (float)deltaTime);
@@ -194,6 +674,8 @@ void processInput(GLFWwindow* window)
         pCamera->ProcessKeyboard(UP, (float)deltaTime);
     if (glfwGetKey(window, GLFW_KEY_PAGE_DOWN) == GLFW_PRESS)
         pCamera->ProcessKeyboard(DOWN, (float)deltaTime);
+
+
 
     if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
         int width, height;
